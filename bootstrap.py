@@ -1,10 +1,10 @@
 import xarray  as xr
-import cpttools as ct 
 from pathlib import Path 
 import datetime as dt 
 import sys, requests, getpass
 from urllib import parse 
 import pandas as pd 
+threeletters = [None, 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 def download(dest, url, verbose=False, auth='credentials', email='kjhall@iri.columbia.edu', password=None):
     if password is None and auth.upper() == 'CREDENTIALS':
@@ -49,9 +49,9 @@ def download_ecmwf(extent, target=(14, 28), training_season=None):
     assert training_season is not None, 'must specify a tuple training season with two pd.Timestamps'
     assert training_season[0].year == training_season[1].year, 'sorry for now, training season cannot be cross-year'
     base = "iridl.ldeo.columbia.edu/SOURCES/.ECMWF/.S2S/.ECMF/.reforecast/.perturbed/.sfc_precip/.tp/"
-    base += "S/({} {} {})/({} {} {})/RANGEEDGES/".format(training_season[0].day, ct.threeletters[training_season[0].month], training_season[0].year, training_season[1].day, ct.threeletters[training_season[1].month], training_season[1].year)
-    base += "L/{}/{}/VALUES/{}L{}differences/".format(target[0], target[1], parse.quote('['), parse.quote(']'))
-    base += "X/{}/{}/RANGEEDGES/Y/{}/{}/RANGEEDGES/".format(extent.west, extent.east, extent.south, extent.north)
+    base += "S/({} {} {})/({} {} {})/RANGEEDGES/".format(training_season[0].day, threeletters[training_season[0].month], training_season[0].year, training_season[1].day, threeletters[training_season[1].month], training_season[1].year)
+    base += "L/{}/{}/VALUES/[L]/differences/".format(target[0], target[1])
+    base += "X/{}/{}/RANGEEDGES/Y/{}/{}/RANGEEDGES/".format(extent['west'], extent['east'], extent['south'], extent['north'])
 
     chunk_files = []
     for year in range(training_season[0].year-20, training_season[0].year):
@@ -61,8 +61,9 @@ def download_ecmwf(extent, target=(14, 28), training_season=None):
     chunks = []
     for i, file in enumerate(chunk_files):
         chunk = xr.open_dataset(file, decode_times=False)
+        print(chunk)
         chunk.hdate.attrs['calendar'] = '360_day'
         chunk = xr.decode_cf(chunk)
         chunk.coords['S'] = [pd.Timestamp(training_season[0].year-20+i, pd.Timestamp(ii).month, pd.Timestamp(ii).day) for ii in chunk.coords['S'].values]
-        chunks.append(chunk)
+        chunks.append(chunk.mean('hdate'))
     return xr.concat(chunks, 'S')
